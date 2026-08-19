@@ -22,9 +22,19 @@ SRC="$HOME/.openclaw/scripts"
 BRANCH="gh-pages"
 LOCK="/tmp/takeover-board-publish.lock"
 
-# Lockfile — a slow push must not overlap the next cron tick.
-exec 9>"$LOCK"
-flock -n 9 || { echo "$(date -u +%FT%TZ) publish already running, skipping"; exit 0; }
+# Lock — a slow push must not overlap the next cron tick. mkdir is atomic on
+# POSIX; macOS has no flock(1), and a `flock || exit 0` guard would fail OPEN
+# (127 -> "skipping") on every run while still exiting 0.
+if ! mkdir "$LOCK" 2>/dev/null; then
+  # Reap a lock orphaned by a crash: anything older than 10 min is stale.
+  if [ -n "$(find "$LOCK" -maxdepth 0 -mmin +10 2>/dev/null)" ]; then
+    echo "$(date -u +%FT%TZ) removing stale lock"; rmdir "$LOCK" 2>/dev/null || true
+    mkdir "$LOCK" 2>/dev/null || { echo "lock contended, skipping"; exit 0; }
+  else
+    echo "$(date -u +%FT%TZ) publish already running, skipping"; exit 0
+  fi
+fi
+trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
 
 [ -f "$DASH" ] || { echo "FATAL: dashboard missing at $DASH"; exit 1; }
 
