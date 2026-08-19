@@ -52,13 +52,14 @@ a:hover{color:var(--accent);text-decoration:underline}
 <b>lifetime cumulative visits</b>, so a brand-new game with few total visits sits at the top by
 construction &mdash; it is a &ldquo;busy relative to how long it has existed&rdquo; measure, not a quality score.
 Raise the min-CCU filter to compare games at a comparable size. Visits come from rotrends and are
-rounded to 3 significant figures, so the denominator is coarse for large games.</div>
+rounded to 3 significant figures, so the denominator is coarse for large games. Note the pool is
+already floored at 100 CCU upstream, so every game listed here clears that bar.</div>
 <div class="tools">
   <input type="text" id="q" placeholder="filter by game or developer&hellip;">
   <select id="minccu">
-    <option value="0">any CCU</option><option value="100" selected>CCU &ge; 100</option>
+    <option value="0" selected>any CCU</option>
     <option value="500">CCU &ge; 500</option><option value="1000">CCU &ge; 1,000</option>
-    <option value="10000">CCU &ge; 10,000</option>
+    <option value="5000">CCU &ge; 5,000</option><option value="10000">CCU &ge; 10,000</option>
   </select>
 </div>
 <div class="tblwrap"><table><thead><tr><th data-k="name">game</th><th data-k="ratio" class="on">ccu/visits</th><th data-k="ccu">ccu</th><th data-k="visits">visits</th><th data-k="play">session</th><th data-k="like">like %</th><th data-k="rel">released</th><th data-k="dev">developer</th></tr></thead><tbody id="tb"></tbody></table></div>
