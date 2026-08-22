@@ -1,0 +1,48 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>TAKEOVER — game boards</title>
+<style>
+:root{--bg:#fbfbfa;--fg:#1a1a18;--dim:#6b6b66;--line:#e4e4e0;--card:#fff;--accent:#b4531f;--band:#fdf4e8}
+@media(prefers-color-scheme:dark){:root{--bg:#151513;--fg:#ecebe6;--dim:#918f88;--line:#2c2c28;--card:#1d1d1a;--accent:#e08a4c;--band:#2a2118}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Inter,sans-serif}
+.wrap{max-width:820px;margin:0 auto;padding:56px 20px 60px}
+h1{font-size:22px;margin:0 0 4px;letter-spacing:-.01em}
+.sub{color:var(--dim);font-size:13px;margin-bottom:30px}
+.card{display:block;background:var(--card);border:1px solid var(--line);border-radius:11px;
+      padding:20px 22px;margin-bottom:14px;text-decoration:none;color:inherit;transition:border-color .12s}
+.card:hover{border-color:var(--accent)}
+.card h2{font-size:16px;margin:0 0 5px;letter-spacing:-.01em}
+.card p{margin:0;color:var(--dim);font-size:13px;line-height:1.6}
+.meta{margin-top:11px;font-size:11.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
+.foot{margin-top:34px;color:var(--dim);font-size:12.5px;line-height:1.7;border-top:1px solid var(--line);padding-top:18px}
+.foot b{color:var(--fg)}
+</style></head><body><div class="wrap">
+<h1>TAKEOVER — game boards</h1>
+<div class="sub">Live Roblox screening data. Internal — please don't share the link around.</div>
+
+<a class="card" href="gemhunt.html">
+  <h2>GEMHUNT board &rarr;</h2>
+  <p>Young, small games where players are actually gripped. Session length, favourites per 1,000 joins,
+     CCU trend and steadiness, scored and ranked. AFK-farm rows are flagged and hidden by default.
+     Sort any column; filter by genre, CCU band, or recency.</p>
+  <div class="meta">982 games &middot; refreshes every 15 minutes</div>
+</a>
+
+<a class="card" href="ratio.html">
+  <h2>CCU / visits leaderboard &rarr;</h2>
+  <p>Every game Scout tracks, ranked by live concurrent players against lifetime visits &mdash;
+     a read on which games are busy relative to how long they have been around.
+     Filter by minimum CCU to compare like with like.</p>
+  <div class="meta">4,489 games &middot; refreshes hourly</div>
+</a>
+
+<div class="foot">
+<b>How to read these.</b> The GEMHUNT board is the one to browse for candidates &mdash; it is scored and
+de-noised. The CCU/visits leaderboard is raw and much larger; its top rows are dominated by brand-new
+games with almost no lifetime visits, which is arithmetic rather than signal, so raise the min-CCU
+filter before drawing conclusions. Both pages link out to roblox.com. Numbers come from Roblox's own
+public game API, polled every 15 minutes.
+</div>
+</div></body></html>
