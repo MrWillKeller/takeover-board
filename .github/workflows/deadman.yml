@@ -1,0 +1,39 @@
+# Dead-man switch for the Scout/GEMHUNT station — see deadman.py.
+# Runs on GitHub's infrastructure (off both Macs): if gh-pages stops being
+# pushed (publish.sh runs every 20 min on the active host), Telegram the team.
+name: deadman
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # GitHub may delay scheduled runs by several minutes
+  workflow_dispatch:
+    inputs:
+      threshold_min:
+        description: "Override THRESHOLD_MIN (e.g. 0 to force the alert path)"
+        default: ""
+      test_label:
+        description: "Prefix Telegram messages with [TEST]"
+        type: boolean
+        default: false
+concurrency:
+  group: deadman
+  cancel-in-progress: false
+permissions:
+  contents: read
+  actions: write            # repository variables hold the fresh/stale state
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: deadman.py
+          sparse-checkout-cone-mode: false
+      - run: python3 deadman.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          THRESHOLD_MIN: ${{ inputs.threshold_min || '50' }}
+          REPEAT_MIN: "360"
+          TEST_LABEL: ${{ inputs.test_label == true && '1' || '' }}
