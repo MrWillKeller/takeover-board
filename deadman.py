@@ -12,11 +12,13 @@ Decision (pure, unit-tested in test_deadman.py):
   fresh -> stale        : one alert when age crosses THRESHOLD_MIN
   stale, still silent   : one reminder every REPEAT_MIN
   stale -> fresh        : one "recovered" message
-State lives in three repository variables (DEADMAN_STATE, DEADMAN_LAST_ALERT_TS,
-DEADMAN_STALE_SINCE) so it survives between cron runs.
+State lives in state.json on the `deadman-state` branch, written through the
+Contents API (GITHUB_TOKEN cannot write repository variables — HTTP 403 even
+with actions:write — but can write file contents with contents:write). Only
+transitions commit, so the branch grows by a few commits per outage.
 
 Env: GITHUB_TOKEN, GITHUB_REPOSITORY (owner/repo), TG_BOT_TOKEN, TG_CHAT_ID.
-Optional: THRESHOLD_MIN (50), REPEAT_MIN (360), BRANCH (gh-pages),
+Optional: THRESHOLD_MIN (50), REPEAT_MIN (360), BRANCH (gh-pages), STATE_BRANCH (deadman-state),
 DRY_RUN=1 (print instead of send/write), NOW_OVERRIDE / LAST_OVERRIDE (ISO
 timestamps, for local testing), TEST_LABEL=1 (prefix messages with "[TEST] ").
 """
@@ -75,20 +77,33 @@ def gh(method, path, token, body=None):
         return e.code, None
 
 
-def get_var(repo, token, name):
-    status, data = gh("GET", f"/repos/{repo}/actions/variables/{name}", token)
-    return data.get("value", "") if status == 200 and data else ""
+def get_state(repo, token, state_branch):
+    """Return (state_dict, blob_sha_or_None) from state.json on the state branch."""
+    status, data = gh("GET", f"/repos/{repo}/contents/state.json?ref={state_branch}", token)
+    if status != 200 or not data:
+        return {}, None
+    import base64
+    try:
+        return json.loads(base64.b64decode(data["content"])), data["sha"]
+    except (ValueError, KeyError):
+        return {}, data.get("sha")
 
 
-def set_var(repo, token, name, value, dry):
+def put_state(repo, token, state_branch, state, sha, dry):
     if dry:
-        print(f"[dry-run] set {name}={value}")
+        print(f"[dry-run] write state.json on {state_branch}: {json.dumps(state)}")
         return
-    status, _ = gh("PATCH", f"/repos/{repo}/actions/variables/{name}", token, {"name": name, "value": value})
-    if status == 404:
-        status, _ = gh("POST", f"/repos/{repo}/actions/variables", token, {"name": name, "value": value})
-    if status not in (201, 204):
-        sys.exit(f"could not write variable {name}: HTTP {status}")
+    import base64
+    body = {
+        "message": f"deadman: {state.get('state')} @ {state.get('updated')}",
+        "content": base64.b64encode((json.dumps(state, indent=1) + "\n").encode()).decode(),
+        "branch": state_branch,
+    }
+    if sha:
+        body["sha"] = sha
+    status, _ = gh("PUT", f"/repos/{repo}/contents/state.json", token, body)
+    if status not in (200, 201):
+        sys.exit(f"could not write state.json on {state_branch}: HTTP {status}")
 
 
 def send_telegram(bot, chat, text, dry):
@@ -133,10 +148,12 @@ def main():
         last = parse_iso(data["commit"]["commit"]["committer"]["date"])
     age_min = (now - last).total_seconds() / 60
 
-    state = get_var(repo, token, "DEADMAN_STATE")
-    last_alert = get_var(repo, token, "DEADMAN_LAST_ALERT_TS")
-    stale_since = get_var(repo, token, "DEADMAN_STALE_SINCE")
-    since_alert_min = (now.timestamp() - float(last_alert)) / 60 if last_alert.strip() else None
+    state_branch = os.environ.get("STATE_BRANCH", "deadman-state")
+    st, sha = get_state(repo, token, state_branch)
+    state = st.get("state", "")
+    last_alert = st.get("last_alert_ts")
+    stale_since = st.get("stale_since", "")
+    since_alert_min = (now.timestamp() - float(last_alert)) / 60 if last_alert else None
 
     new_state, action = decide(age_min, state, since_alert_min, threshold, repeat)
     last_s = last.strftime("%Y-%m-%d %H:%MZ")
@@ -151,14 +168,16 @@ def main():
             "off-network, out of battery — or publish.sh is failing.\n"
             "Check: MacBook lid/battery/Wi-Fi, the mini's Tailscale, then the publish log.\n"
             f"Reminder every {fmt_dur(repeat)} while silent."), dry)
-        set_var(repo, token, "DEADMAN_LAST_ALERT_TS", str(int(now.timestamp())), dry)
+        st["last_alert_ts"] = int(now.timestamp())
         if action == "alert":
-            set_var(repo, token, "DEADMAN_STALE_SINCE", now.strftime("%Y-%m-%dT%H:%M:%SZ"), dry)
+            st["stale_since"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
     elif action == "recovered":
-        silent = f" Silent for {fmt_dur((now - parse_iso(stale_since)).total_seconds() / 60)}." if stale_since.strip() else ""
+        silent = f" Silent for {fmt_dur((now - parse_iso(stale_since)).total_seconds() / 60)}." if stale_since else ""
         send_telegram(bot, chat, f"{label}✅ Scout/GEMHUNT dead-man — boards publishing again (last push {last_s}, {fmt_dur(age_min)} ago).{silent}", dry)
-    if new_state != state:
-        set_var(repo, token, "DEADMAN_STATE", new_state, dry)
+    if action is not None or new_state != state:
+        st["state"] = new_state
+        st["updated"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        put_state(repo, token, state_branch, st, sha, dry)
 
 
 if __name__ == "__main__":

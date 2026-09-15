@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: false
 permissions:
   contents: read
-  actions: write            # repository variables hold the fresh/stale state
+  contents: write           # state.json on the deadman-state branch (GITHUB_TOKEN cannot write repo variables)
 jobs:
   check:
     runs-on: ubuntu-latest
