@@ -32,7 +32,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
-          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID }}      # Telegram group id — not a credential
           THRESHOLD_MIN: ${{ inputs.threshold_min || '50' }}
           REPEAT_MIN: "360"
           TEST_LABEL: ${{ inputs.test_label == true && '1' || '' }}
