@@ -1,1 +1,6 @@
-{"state": "fresh", "updated": "2026-09-15T00:31:46Z"}
+{
+ "state": "stale",
+ "updated": "2026-09-15T00:35:39Z",
+ "last_alert_ts": 1789432539,
+ "stale_since": "2026-09-15T00:35:39Z"
+}
