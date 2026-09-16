@@ -4,7 +4,7 @@
 name: deadman
 on:
   schedule:
-    - cron: "4,14,24,34,44,54 * * * *"   # off the round minutes GitHub sheds hardest; backstop only: GitHub honours ~1 in 20 of these ticks here (2-5 h cadence, 2026-09-16). The real 10-min tick is the Cloudflare cron ~/cf-workers/deadman-tick firing workflow_dispatch.
+    - cron: "4,14,24,34,44,54 * * * *"   # off the round minutes GitHub sheds hardest; backstop only: GitHub honours ~1 in 20 of these ticks here (2-5 h cadence, 2026-09-16). The real 10-min tick is workflow_dispatch from the MacBook (com.gemhunt-mb.deadman-tick) and, once deployed, the Cloudflare cron ~/cf-workers/deadman-tick.
   workflow_dispatch:
     inputs:
       threshold_min:
