@@ -19,6 +19,7 @@ concurrency:
   cancel-in-progress: false
 permissions:
   contents: write           # state.json on the deadman-state branch (GITHUB_TOKEN cannot write repo variables)
+  actions: read             # tick watchdog reads the newest workflow_dispatch run (deadman.py decide_tick)
 jobs:
   check:
     runs-on: ubuntu-latest

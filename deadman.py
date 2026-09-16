@@ -17,8 +17,17 @@ Contents API (GITHUB_TOKEN cannot write repository variables — HTTP 403 even
 with actions:write — but can write file contents with contents:write). Only
 transitions commit, so the branch grows by a few commits per outage.
 
+Tick watchdog (decide_tick, also unit-tested): GitHub drops most of this workflow's own
+"*/10" schedule runs (observed 2-5 h apart, 2026-09-16), so a Cloudflare cron fires
+workflow_dispatch every 10 min instead. If that tick dies (PAT expired, worker gone)
+the switch would silently fall back to the slow cadence — so on each schedule
+(backstop) run, once a dispatch run has ever been seen, the age of the newest
+workflow_dispatch run is checked and a ⚠️ is posted (once per TICK_REPEAT_MIN)
+when it exceeds TICK_STALE_MIN; the next dispatch run posts ✅. Needs actions:read.
+
 Env: GITHUB_TOKEN, GITHUB_REPOSITORY (owner/repo), TG_BOT_TOKEN, TG_CHAT_ID.
 Optional: THRESHOLD_MIN (50), REPEAT_MIN (360), BRANCH (gh-pages), STATE_BRANCH (deadman-state),
+TICK_STALE_MIN (60), TICK_REPEAT_MIN (1440), GITHUB_EVENT_NAME (set by Actions),
 DRY_RUN=1 (print instead of send/write), NOW_OVERRIDE / LAST_OVERRIDE (ISO
 timestamps, for local testing), TEST_LABEL=1 (prefix messages with "[TEST] ").
 """
@@ -45,6 +54,21 @@ def decide(age_min, state, since_alert_min, threshold, repeat):
     if not stale_now and was_stale:
         return "fresh", "recovered"
     return "fresh", None
+
+
+def decide_tick(event, tick_seen, dispatch_age_min, since_tick_alert_min, stale_after, repeat):
+    """Return (tick_seen, action) where action in {None, 'tick_alert', 'tick_recovered'}.
+
+    event: GITHUB_EVENT_NAME ('workflow_dispatch' = the Cloudflare tick, 'schedule' = backstop).
+    Self-arming: never alerts until one dispatch run has been seen. Unknown age (API
+    failure) is not an alert."""
+    if event == "workflow_dispatch":
+        return True, ("tick_recovered" if since_tick_alert_min is not None else None)
+    if not tick_seen or dispatch_age_min is None or dispatch_age_min <= stale_after:
+        return tick_seen, None
+    if since_tick_alert_min is None or since_tick_alert_min >= repeat:
+        return True, "tick_alert"
+    return True, None
 
 
 # --- I/O -------------------------------------------------------------------
@@ -104,6 +128,16 @@ def put_state(repo, token, state_branch, state, sha, dry):
     status, _ = gh("PUT", f"/repos/{repo}/contents/state.json", token, body)
     if status not in (200, 201):
         sys.exit(f"could not write state.json on {state_branch}: HTTP {status}")
+
+
+def newest_dispatch_age_min(repo, token, now):
+    """Minutes since the newest workflow_dispatch run of deadman.yml, or None if unknown."""
+    status, data = gh("GET", f"/repos/{repo}/actions/workflows/deadman.yml/runs?event=workflow_dispatch&per_page=1", token)
+    try:
+        created = data["workflow_runs"][0]["created_at"]
+    except (TypeError, KeyError, IndexError):
+        return None
+    return (now - parse_iso(created)).total_seconds() / 60
 
 
 def send_telegram(bot, chat, text, dry):
@@ -174,8 +208,31 @@ def main():
     elif action == "recovered":
         silent = f" Silent for {fmt_dur((now - parse_iso(stale_since)).total_seconds() / 60)}." if stale_since else ""
         send_telegram(bot, chat, f"{label}✅ Scout/GEMHUNT dead-man — boards publishing again (last push {last_s}, {fmt_dur(age_min)} ago).{silent}", dry)
-    if action is not None or new_state != state:
+    # Tick watchdog — is the Cloudflare workflow_dispatch tick still arriving?
+    event = os.environ.get("GITHUB_EVENT_NAME", "")
+    tick_seen = bool(st.get("tick_seen"))
+    tick_alert = st.get("tick_alert_ts")
+    since_tick_alert_min = (now.timestamp() - float(tick_alert)) / 60 if tick_alert else None
+    dispatch_age = newest_dispatch_age_min(repo, token, now) if (event == "schedule" and tick_seen) else None
+    tick_seen_new, tick_action = decide_tick(
+        event, tick_seen, dispatch_age, since_tick_alert_min,
+        float(os.environ.get("TICK_STALE_MIN", "60")), float(os.environ.get("TICK_REPEAT_MIN", "1440")))
+    print(f"event={event or '(unset)'} tick_seen={tick_seen}->{tick_seen_new} dispatch_age={'?' if dispatch_age is None else f'{dispatch_age:.1f}min'} tick_action={tick_action}")
+    if tick_action == "tick_alert":
+        send_telegram(bot, chat, (
+            f"{label}⚠️ Scout/GEMHUNT dead-man tick stopped\n\n"
+            f"No workflow_dispatch run for {fmt_dur(dispatch_age)} — the Cloudflare cron (deadman-tick) is not firing, "
+            "so this switch is back on GitHub's own schedule (runs every 2-5 h, not 10 min).\n"
+            "Check: PAT expired/revoked (GH_PAT secret), worker deleted, workflow renamed. "
+            "~/cf-workers/deadman-tick/DEPLOY.md"), dry)
+        st["tick_alert_ts"] = int(now.timestamp())
+    elif tick_action == "tick_recovered":
+        send_telegram(bot, chat, f"{label}✅ Scout/GEMHUNT dead-man tick back (workflow_dispatch runs again).", dry)
+        st.pop("tick_alert_ts", None)
+
+    if action is not None or new_state != state or tick_action is not None or tick_seen_new != tick_seen:
         st["state"] = new_state
+        st["tick_seen"] = tick_seen_new
         st["updated"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         put_state(repo, token, state_branch, st, sha, dry)
 
