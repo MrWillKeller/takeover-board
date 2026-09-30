@@ -1,7 +1,7 @@
 {
- "state": "fresh",
- "updated": "2026-09-30T00:26:05Z",
- "last_alert_ts": 1790722617,
- "stale_since": "2026-09-29T22:56:57Z",
+ "state": "stale",
+ "updated": "2026-09-30T03:37:59Z",
+ "last_alert_ts": 1790739479,
+ "stale_since": "2026-09-30T03:37:59Z",
  "tick_seen": true
 }
